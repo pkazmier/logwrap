@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="generator" content="Docutils 0.2.8: http://docutils.sourceforge.net/" />
+<title>Builder</title>
+<link rel="stylesheet" href="http://www.kazmier.com/computer/logwrap/docutils.css" type="text/css" />
+</head>
+<body>
+<div class="document" id="builder">
+<h1 class="title">Builder</h1>
+<p>The Builder module contains functions to convert an XML configuration
+file into a set of objects that can be used in the event framework.</p>
+<blockquote>
+<dl>
+<dt>class <cite>BuilderError(Exception)</cite>:</dt>
+<dd><p class="first">Custom exception used to report an error when converting an XML
+file to actual objects.  The exception contains the relevant node
+if applicable.</p>
+<blockquote class="last">
+<dl>
+<dt><cite>__init__(value, node=None)</cite>:</dt>
+<dd>Constructor that specifies the error message, and
+optionally the node that caused the error.</dd>
+<dt><cite>__str__()</cite>:</dt>
+<dd>Returns a string representation of the error.</dd>
+</dl>
+</blockquote>
+</dd>
+<dt><cite>interpolate_text(text, dictionary)</cite>:</dt>
+<dd>Replace occurances of <tt class="literal"><span class="pre">${key}</span></tt> with the value of <tt class="literal"><span class="pre">dictionary[key]</span></tt>.
+This can be used to interpolate text with arbitrary dictionaries such as
+the os.environ.</dd>
+<dt><cite>get_text(nodelist)</cite>:</dt>
+<dd>Get the text nodes and concatenate them together.  This also
+includes CDATA sections.</dd>
+<dt><cite>get_child_elements(name, node, first=0)</cite>:</dt>
+<dd>Gets all children with the specified name.  This only works on
+single level unlike getElementsByTagName.  If the optional 'first'
+argument is true, return only the first element in the list or
+None if the list is empty.</dd>
+<dt><cite>parse_handler_constructor_args(node)</cite>:</dt>
+<dd>Create a kwarg map that contains all of the attributes of an
+element.  In addition to attributes, child nodes are also used
+(and override attribute elements).</dd>
+<dt><cite>parse_handler(node)</cite>:</dt>
+<dd>Parse a handler object and locate the handler class so an
+instance can be instantiated with the supplied arguments.  A
+handler type can be specified in either of the following formats:
+<tt class="literal"><span class="pre">class_name</span></tt> or <tt class="literal"><span class="pre">package_name:class_name</span></tt>.  In the first case,
+the specified class name is searched for in the global namespace.
+In the latter case, the specified package is searched for the
+class name. In both cases, as a convienence to users, the type
+name, if not found is automatically converted to a full name by
+appending 'EventHandler' to the end of the specified type.</dd>
+<dt><cite>build_error_handler(node)</cite>:</dt>
+<dd>Scan the node for one or more handlers.  If there is only one
+handler, then that handler is simply returned.  However, if there
+are more than one handlers, they are automatically chained
+together using a ChainEventHandler.</dd>
+<dt><cite>build_handler(node)</cite>:</dt>
+<dd>Scan the node for one or more handlers.  If there is only one
+handler, then that handler is simply returned.  However, if there
+are more than one handlers, they are automatically chained
+together using a ChainEventHandler.</dd>
+<dt><cite>parse_rule(node)</cite>:</dt>
+<dd>Parse a Rule and verify it specifies a regular expression.</dd>
+<dt><cite>build_rules(node)</cite>:</dt>
+<dd>Parse all of Rules that are part of this node.  It also ensures
+that at least one rule exists.</dd>
+<dt><cite>parse_logFiles(node)</cite>:</dt>
+<dd>Scan all of the logFile tags and determine if they should be
+tracked.</dd>
+<dt><cite>parse_logEncapsulator(node)</cite>:</dt>
+<dd>Scan a LogEncapsulator and instantiate one that can be returned
+to the caller.</dd>
+<dt><cite>parse_configuration(root)</cite>:</dt>
+<dd>Parses an XML document representing the configuration of the
+logwrap utility.  The document is parsed and two items are
+returned: the error handler used to process errors and a list of
+encapsulators for the event framework.</dd>
+</dl>
+</blockquote>
+</div>
+</body>
+</html>

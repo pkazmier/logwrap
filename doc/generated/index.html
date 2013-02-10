@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="generator" content="Docutils 0.3.1: http://docutils.sourceforge.net/" />
+<title>LogWrap</title>
+<meta name="author" content="Pete Kazmier" />
+<link rel="stylesheet" href="http://www.kazmier.com/computer/logwrap/docutils.css" type="text/css" />
+</head>
+<body>
+<div class="document" id="logwrap">
+<h1 class="title">LogWrap</h1>
+<table class="docinfo" frame="void" rules="none">
+<col class="docinfo-name" />
+<col class="docinfo-content" />
+<tbody valign="top">
+<tr><th class="docinfo-name">Author:</th>
+<td>Pete Kazmier</td></tr>
+<tr><th class="docinfo-name">Version:</th>
+<td>README,v 1.20 2003/12/03 17:36:23 kaz Exp</td></tr>
+</tbody>
+</table>
+<div class="section" id="overview">
+<h1><a name="overview">Overview</a></h1>
+<p>LogWrap is a utility that can monitor log files in real-time for
+patterns, generate events when those patterns are matched, and then
+process events in a variety of manners using event handlers to do the
+processing.  The base package includes event handlers to print, send
+email messages, and fire SNMP traps.  In addition, simple event
+suppression can be performed based on count and frequency of event
+arrival.  Detailed tutorials exist on how to use the suppression-based
+event handlers, as well as how to create your own custom event
+handlers (see the Usage section below for links).</p>
+<p>The following Python packages are part of the logwrap proper (click on
+the package name for the pydoc):</p>
+<dl>
+<dt><a class="reference" href="pydocs/utils/">com.kazmier.utils</a></dt>
+<dd>Contains the <tt class="literal"><span class="pre">TailFollow</span></tt> package which is used to follow output
+that is appended to a file (similar to a <tt class="literal"><span class="pre">tail</span> <span class="pre">-f</span></tt> command).  In
+addition, it will track the file as its rotated by log rotation
+scripts.  Tracking is the ability to close the old file descriptor
+after a new file has been created with the original name in the
+filesystem.</dd>
+<dt><a class="reference" href="pydocs/event/">com.kazmier.event</a></dt>
+<dd>Simple event framework that consists of event generators, a
+dispatcher, and event handlers that process the events.  The
+framework can be used for other applications as its not dependent on
+any other logwrap package.</dd>
+<dt><a class="reference" href="pydocs/logwrap/">com.kazmier.logwrap</a></dt>
+<dd>The package that contains core functionality for the wrapping of log
+files.  It includes the LogEncapsulator class which enables a user to
+specify one or more files to monitor with a specific set of Rules.  A
+Rule defines the pattern to be matched, as well as the EventHandlers
+that should process events matching the Rule.  Also included in the
+package are some simple event suppression handlers (based on count
+and frequency), a MailEventHander, and an SnmpTrapEventHandler.
+Finally, a Builder is included that can generate LogEncapsulators
+based on an XML configuration file.</dd>
+</dl>
+</div>
+<div class="section" id="usage-and-documentation">
+<h1><a name="usage-and-documentation">Usage and Documentation</a></h1>
+<p>The logwrap package can be used directly in Python programs by
+utilizing the API directly.  Example use of the API is documented in
+the pydocs (start by looking at the <a class="reference" href="pydocs/logwrap/LogEncapsulator.html">LogEncapsulator</a> documentation).
+Alternatively (and much more common), the <tt class="literal"><span class="pre">logwrap</span></tt> script can be
+invoked from the command line with a single argument specifying an XML
+configuration file.  For example:</p>
+<pre class="literal-block">
+$ logwrap /home/kaz/syslog-logwrap.xml
+</pre>
+<p>The configuration file specifies the files, patterns within those
+files to be monitored, and actions to take upon successful matches.
+See the sample <a class="reference" href="logwrap.txt">configuration</a> file included in the distribution (it is
+thoroughly documented).  If you want to run the logwrap program as a
+daemon (in the background), specify the <tt class="literal"><span class="pre">-d</span></tt> option:</p>
+<pre class="literal-block">
+$ logwrap -d /home/kaz/syslog-logwrap.xml
+</pre>
+<p>For a detailed explanation on the various event suppression handlers
+available in the LogWrap framework, please check out the document on
+<a class="reference" href="suppression.html">SuppressionHandlers</a>.  It will shed light on the how event handler
+chains and suppression-based matching work alongside with the packaged
+suppression-based event handlers.</p>
+<p>In addition, there is an advanced <a class="reference" href="custom-tutorial.html">CustomEventHandlerTutorial</a> on how
+to create your own custom event handler that will telnet to a host and
+execute a command when a specific log message is received.  This
+example provides yet another sample XML configuration file as well as
+a simple python script that defines the custom event handler.  The
+tutorial assumes you already have a general understanding of how
+logwrap works.</p>
+</div>
+<div class="section" id="installation">
+<h1><a name="installation">Installation</a></h1>
+<p>Installationn is simple and easy thanks to the Python distutils.
+First, you need to download two Python packages into a temporary
+directory:</p>
+<ol class="arabic simple">
+<li><a class="reference" href="http://www.kazmier.com/computer/logwrap/logwrap-CURRENT.tar.gz">LogWrap</a></li>
+<li><a class="reference" href="http://www.kazmier.com/computer/logwrap/pysnmp-CURRENT.tar.gz">PySNMP</a> (only download if you want to fire SNMP traps)</li>
+</ol>
+<p>After downloading, you need to install each package.  Package
+intallation is simple in Python.  The following procedure will work for
+both packages:</p>
+<pre class="literal-block">
+$ gunzip package.tar.gz
+$ tar xvf package.tar
+$ cd package
+$ sudo python setup.py install
+</pre>
+<p>Repeat the above procedure for both downloaded packages.  Feel free to
+clean up and remove the tar files and/or untar directories.
+Installation is now complete.</p>
+<p>Four Python packages were installed in the system:</p>
+<ol class="arabic simple">
+<li>com.kazmier.utils</li>
+<li>com.kazmier.event</li>
+<li>com.kazmier.logwrap</li>
+<li>pysnmp</li>
+</ol>
+<p>In addition, a script called <tt class="literal"><span class="pre">logwrap</span></tt> will be installed into one of
+your system <tt class="literal"><span class="pre">bin</span></tt> directories.  This is the program that users will
+execute to start log monitoring.</p>
+</div>
+<div class="section" id="change-log">
+<h1><a name="change-log">Change Log</a></h1>
+<dl>
+<DT>v1.0</dt>
+<dd><ul class="first last simple">
+<li>Fixed a bug that would prevent the MailHandler from permitting other
+Handlers in the EventChain to fire.</li>
+</ul>
+</dd>
+<dt>v0.7</dt>
+<dd><ul class="first last simple">
+<li>Fixed some rounding issues.</li>
+</ul>
+</dd>
+<dt>v0.6</dt>
+<dd><ul class="first last simple">
+<li>This version wraps up all of the 0.5.x changes into a new release
+with the added enhancement that variable interpolation occurs for
+any text node or attribute value in the XML config.</li>
+<li>The EventDispatcher can now accept an event handler that will be
+used if an error occurs during the processing of other events.
+When an error occurs in the dispatching of events, a new event is
+generated and passed to this error handler.  The new event passes
+a 2-item tuple as the event.data object.  The first item is the
+exception, and the second item is the original event that caused
+the exception.</li>
+<li>Users can also specify one or more handlers via the XML
+configuration file.  The handlers specified in the config file
+automatically wrapped by the new ErrorHandlerAdapter which permits
+users to use existing logwrap handlers (those that expect a
+LogMatch object as the event.data object).  The
+ErrorHandlerAdapter converts the event.data tuple (containing the
+exception and original event) into a LogMatch object.</li>
+</ul>
+</dd>
+<dt>v0.5.3</dt>
+<dd><ul class="first last simple">
+<li>The XML configuration file now supports interpolation of environment
+variables.  Any text in the form of '${ENVIRONMENT_VARIABLE}' is now
+replaced with the value of ENVIRORNMENT_VARIABLE.</li>
+</ul>
+</dd>
+<dt>v0.5.2</dt>
+<dd><ul class="first last simple">
+<li>TailFollow now monitors file size when tracking files.  If the file
+size is smaller, then it is assumed the file was replaced and that
+we now need to reread the file to catch up on events we missed.</li>
+<li>Wrote a quick little script called 're-profile' that can be used
+to profile the speed of regular expressions.  I wrote this real 
+quick due to the lack of speed I was getting with logwrap when 
+using this regular expression: <tt class="literal"><span class="pre">.+?</span> <span class="pre">.+?</span> <span class="pre">.+?</span> <span class="pre">(.+?)</span> <span class="pre">.+?</span> <span class="pre">(Configured</span> <span class="pre">.*)</span></tt>
+That regexp takes approximately one second to parse a single line!
+With this little script I was able to profile the speed of several
+regexps to determine the optimal solution.</li>
+</ul>
+</dd>
+<dt>v0.5.1</dt>
+<dd><ul class="first last simple">
+<li>Added the <tt class="literal"><span class="pre">-d</span></tt> flag to the logwrap program to enable daemon mode.</li>
+</ul>
+</dd>
+</dl>
+</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,462 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="generator" content="Docutils 0.2.8: http://docutils.sourceforge.net/" />
+<title>Suppression-Based Event Handlers</title>
+<meta name="author" content="Pete Kazmier" />
+<link rel="stylesheet" href="http://www.kazmier.com/computer/logwrap/docutils.css" type="text/css" />
+</head>
+<body>
+<div class="document" id="suppression-based-event-handlers">
+<h1 class="title">Suppression-Based Event Handlers</h1>
+<table class="docinfo" frame="void" rules="none">
+<col class="docinfo-name" />
+<col class="docinfo-content" />
+<tbody valign="top">
+<tr><th class="docinfo-name">Author:</th>
+<td>Pete Kazmier</td></tr>
+<tr><th class="docinfo-name">Version:</th>
+<td>suppression.txt,v 1.2 2003/08/04 14:09:31 kaz Exp</td></tr>
+</tbody>
+</table>
+<div class="section" id="introduction">
+<h1><a name="introduction">Introduction</a></h1>
+<p>The LogWrap framework comes with a set of event handlers designed to
+suppress events generated from matched log messages.  Suppression of
+events can be useful if you do not want your action-based event
+handlers (mail, paging, SNMP traps) triggering upon each and every
+event.  For example, suppose you have the following rule defined in
+your XML configuration file:</p>
+<pre class="literal-block">
+&lt;rule&gt;
+  &lt;regexp&gt;Error Code = (\d+), Error Message = (.*)&lt;/regexp&gt;
+  &lt;handler type=&quot;Mail&quot;
+           toaddrs=&quot;pete&#64;example.com&quot;
+           fromaddr=&quot;root&#64;example.com&quot;
+           subject=&quot;Application Error&quot;
+           body=&quot;\1: \2&quot;/&gt;
+&lt;/rule&gt;
+</pre>
+<p>As it is currently defined, I will get an email each and every time an
+error occurs in my application (as seen via the log file).  Although
+this sounds great, in reality, when my application fails it writes
+several messages to the log file very quickly.  This in turn generates
+several emails to me (flooding my inbox).  In this case, it would have
+been sufficient for me to get a single email for this one application
+fault.  The above example illustrates the reason suppression-based
+event handlers were created for the LogWrap framework.</p>
+<p>In this document, each of the four suppression-based event handlers
+(<tt class="literal"><span class="pre">WaitToCount</span></tt>, <tt class="literal"><span class="pre">IntervalCount</span></tt>, <tt class="literal"><span class="pre">WaitToFrequency</span></tt>, and
+<tt class="literal"><span class="pre">LimitToFrequency</span></tt>) will be described in detail so you can start
+using them in your own environments.  However, prior to this a
+discussion on event handler chaining and matching must be presented to
+provide the necessary background for the upcoming descriptions.</p>
+</div>
+<div class="section" id="event-handler-chaining">
+<h1><a name="event-handler-chaining">Event Handler Chaining</a></h1>
+<p>Before proceeding to the descriptions of the event handlers, we will
+explore how the event handlers fit into the LogWrap framework.  Lets
+begin with the specification of handlers in the XML configuration
+file.  When you define a <tt class="literal"><span class="pre">&lt;rule&gt;</span></tt> in your configuration file, you
+must specify a regular expression (used to match incoming log
+messages) and then one or more event hanlders that will be used to
+process any matching messages.</p>
+<p>If you define more than one handler, you have created an event handler
+chain.  The chain is simply a list of handlers to be used when
+processing an event.  When an event arrives that matches a rule, each
+handler in the chain processes the event.  The handlers process the
+event in the order they were defined.  For example:</p>
+<pre class="literal-block">
+&lt;rule&gt;
+  &lt;regexp&gt;Error Code = (\d+), Error Message = (.*)&lt;/regexp&gt;
+  &lt;handler type=&quot;Print&quot; file=&quot;stdout&quot;/&gt;
+  &lt;handler type=&quot;Print&quot; file=&quot;stderr&quot;/&gt;
+  &lt;handler type=&quot;Mail&quot;
+           toaddrs=&quot;pete&#64;example.com&quot;
+           fromaddr=&quot;root&#64;example.com&quot;
+           subject=&quot;Application Error&quot;
+           body=&quot;\1: \2&quot;/&gt;
+&lt;/rule&gt;
+</pre>
+<p>If a message arrives in the log that matches the pattern specified in
+the above rule, an event chain consisting of three event handlers will
+be used to process the event.  First, the <tt class="literal"><span class="pre">Print</span></tt> handler will write
+the message to <tt class="literal"><span class="pre">stdout</span></tt>, then another <tt class="literal"><span class="pre">Print</span></tt> handler will write
+the message to <tt class="literal"><span class="pre">stderr</span></tt>, followed by the <tt class="literal"><span class="pre">Mail</span></tt> handler which will
+send an email with details from the message.</p>
+<p>Technically speaking, an event can have one and only one event handler
+associated with it.  You may be scratching your head then wondering
+how come we have specified three handlers in the above example if you
+can only have one handler per event.  To answer that question, lets
+examine how the above rules would be written if we were using the API
+directly (instead of the XML configuration file).  First, we show the
+original rule where only an email is sent:</p>
+<pre class="literal-block">
+# Lets setup our mail handler first.  This just creates the handler,
+# it does not associate it with any particular rule yet.
+handler = MailEventHandler(toaddrs=&quot;pete&#64;example.com&quot;,
+                           fromaddr=&quot;root&#64;example.com&quot;,
+                           subject=&quot;Application Error&quot;,
+                           body=&quot;\1: \2&quot;)
+
+# Now we are going to associate the handler to a particular rule.
+# Recall, a rule contains a regular expression used to match, and a
+# SINGLE event handler used to process events matching this rule.
+rule = Rule(&quot;Error Code = (\d+), Error Message = (.*)&quot;, handler)
+</pre>
+<p>As you can see, a <em>single</em> event handler is passed to the constructor
+of the <tt class="literal"><span class="pre">Rule</span></tt> object which associates it to a particular event that
+matches the specified regular expression.  Now, lets see how we define
+an event handler chain:</p>
+<pre class="literal-block">
+# Define our handlers first.  This does not associate them to any
+# specific event, it only creates the handlers.  We define three
+# handlers.
+handler1 = PrintEventHandler(file=&quot;stdout&quot;)
+handler2 = PrintEventHandler(file=&quot;stderr&quot;)
+handler3 = MailEventHandler(toaddrs=&quot;pete&#64;example.com&quot;,
+                             fromaddr=&quot;root&#64;example.com&quot;,
+                             subject=&quot;Application Error&quot;,
+                             body=&quot;\1: \2&quot;)
+
+# Here comes the magic.  We are going to group all of the above
+# handlers in ONE handler called a ChainEventHandler.
+handler = ChainEventHandler(handler1, handler2, handler3)
+
+# With all of the handlers now grouped into one handler, we can now
+# pass that single ChainEventHandler to the constructor of the Rule
+# object which can only take a SINGLE event handler.
+rule = Rule(&quot;Error Code = (\d+), Error Message = (.*)&quot;, handler)
+</pre>
+<p>The above example illustrates the use of a new event handler called
+the <tt class="literal"><span class="pre">ChainEventHandler</span></tt>.  This handler's sole purpose is to enable
+users to specify more than one handler to process an event.  Going
+back to our XML configuration, the configuration parser automatically
+creates a <tt class="literal"><span class="pre">ChainEventHandler</span></tt> whenever more than one event handler
+has been specified in a <tt class="literal"><span class="pre">&lt;rule&gt;</span></tt> block.</p>
+<p>There is one additional piece of information that you must be aware of
+before we proceed to the discussion of the four suppression-based
+event handlers.  Any handler that is part of a chain may terminate the
+execution of the chain thus bypassing any handlers specified after the
+one that terminated the chain.  This is how the suppression-based
+handlers operate.  If the event should be suppressed, the
+suppression-based handler will terminate the chain and prevent any
+other handlers from executing.  This is why you must specify these
+special event handlers before any of your action-based handlers (those
+that take real action).</p>
+<p>Now that you are aware of event handler chains, and how a handler can
+terminate the chain, you are ready to move on to the actual
+descriptions of the suppression-based event handlers.</p>
+</div>
+<div class="section" id="suppression-based-matching">
+<h1><a name="suppression-based-matching">Suppression-Based Matching</a></h1>
+<p>Each of the suppression-based event handlers enable you to suppress
+based on the entire matched message, or only parts of a matched
+message.  Lets use an example to illustrate this concept.  Assume you
+oversee the management of a centralized syslog server in which all of
+your organization's network devices are configured to send syslog
+messages whenever they have been rebooted.  We can expect to see the
+following messages in the log file:</p>
+<pre class="literal-block">
+mm/dd/yy hh:mm:ss w.x.y.z: Device has been rebooted
+</pre>
+<p>Where <tt class="literal"><span class="pre">w.x.y.z</span></tt> is the IP address of the device logging the reboot
+message.  Upon receipt of these messages, you want to send an email to
+yourself notifying you of the event.  However, you don't want to
+overwhelm yourself with emails so you decide that you only want to get
+an email when the <em>same</em> device have been rebooted three times.</p>
+<p>To specify this rule, I will use the <tt class="literal"><span class="pre">WaitToCount</span></tt> suppression-based
+event handler, which we haven't discussed yet.  As you might imagine,
+<tt class="literal"><span class="pre">WaitToCount</span></tt> will wait for a particular count of events to occur
+before allowing the rest of the event chain to proceed.  Although we
+are using <tt class="literal"><span class="pre">WaitToCount</span></tt> as an example, it is important to realize
+that each of the suppression-based event handlers can be configured
+with the <tt class="literal"><span class="pre">match_on</span></tt> option.</p>
+<p>Your first attempt at the configuration for this rule might look like
+this:</p>
+<pre class="literal-block">
+&lt;rule&gt;
+  &lt;regexp&gt;.*? (\d+\.\d+\.\d+\.\d+): .*? rebooted&lt;/regexp&gt;
+  &lt;handler type=&quot;WaitToCount&quot; threshold=&quot;3&quot;/&gt;
+  &lt;handler type=&quot;Mail&quot;
+           toaddrs=&quot;pete&#64;example.com&quot;
+           fromaddr=&quot;root&#64;example.com&quot;
+           subject=&quot;Device Rebooted&quot;
+           body=&quot;\1 was rebooted&quot;/&gt;
+&lt;/rule&gt;
+</pre>
+<p>However, if it did, it would not work as expected.  We must be very
+careful with words and what we expect to happen.  Our initial goal was
+to wait until the <em>same</em> device has been rebooted three times before
+sending an email.  The above rule will only work as expected if the
+<em>same</em> device was rebooted three times within <em>one</em> second, which is
+very unlikely.  Why is that?  The reason is that all of the
+suppression-based event handlers suppress based on the <em>entire</em>
+matched message.  For example:</p>
+<pre class="literal-block">
+08/03/03 12:10:05 10.10.10.10: Device has been rebooted
+08/03/03 13:07:36 11.11.11.11: Device has been rebooted
+08/03/03 15:10:05 12.12.12.12: Device has been rebooted
+</pre>
+<p>If the above three messages arrived in the log file, the event handler
+&quot;sees&quot; three entirely <em>different</em> events even though they all matched
+the specified regular expression.  In order to generate an email for
+the above rule, the following messages would have to be logged:</p>
+<pre class="literal-block">
+08/03/03 12:10:05 10.10.10.10: Device has been rebooted
+08/03/03 12:10:05 10.10.10.10: Device has been rebooted
+08/03/03 12:10:05 10.10.10.10: Device has been rebooted
+</pre>
+<p>In this case, the three messages match in their <em>entirety</em> and thus
+trigger an email.  Clearly, this is not what we had intended, which is
+why the <tt class="literal"><span class="pre">match_on</span></tt> option was created.  This optional configuration
+parameter is a comma-separated list of positional parameters
+identifying the regular expression's match groups (items within the
+parentheses).  When this parameter is specified, only the parts
+identified by the match groups are used to determine if a message
+should be considered a match in terms of suppression.  Thus, in order
+to trigger an email when the <em>same</em> device is rebooted three times, we
+need to match on the IP address instead of the entire message:</p>
+<pre class="literal-block">
+&lt;rule&gt;
+  &lt;regexp&gt;.*? (\d+\.\d+\.\d+\.\d+): .*? rebooted&lt;/regexp&gt;
+  &lt;handler type=&quot;WaitToCount&quot; threshold=&quot;3&quot; match_on=&quot;1&quot;/&gt;
+  &lt;handler type=&quot;Mail&quot;
+           toaddrs=&quot;pete&#64;example.com&quot;
+           fromaddr=&quot;root&#64;example.com&quot;
+           subject=&quot;Device Rebooted&quot;
+           body=&quot;\1 was rebooted&quot;/&gt;
+&lt;/rule&gt;
+</pre>
+<p>In the above configuration block, the <tt class="literal"><span class="pre">match_on</span></tt> parameter was
+specified as part of the suppression-based event handler.  Its value
+is <tt class="literal"><span class="pre">1</span></tt> which corresponds to the IP address in the log message
+because we have used the regular expression grouping operators
+(parentheses) surrounding the IP address.  The following log messages
+would trigger an email now:</p>
+<pre class="literal-block">
+08/03/03 12:10:05 10.10.10.10: Device has been rebooted
+08/03/03 13:07:36 11.11.11.11: Device has been rebooted
+08/03/03 15:10:05 12.12.12.12: Device has been rebooted
+08/03/03 16:34:11 10.10.10.10: Device has been rebooted
+08/03/03 18:52:39 10.10.10.10: Device has been rebooted
+</pre>
+<p>What if you wanted to be notified via email when <em>any</em> three devices
+have been rebooted?  In order to write this configuration rule, you
+need to identify a part of the log message that can be used to match
+by the suppression handler.  Because we want to match on <em>any</em> three
+devices, we need to use the grouping operators on a part of the log
+message that would be constant among the log messages:</p>
+<pre class="literal-block">
+&lt;rule&gt;
+  &lt;regexp&gt;.*? (\d+\.\d+\.\d+\.\d+): .*? (rebooted)&lt;/regexp&gt;
+  &lt;handler type=&quot;WaitToCount&quot; threshold=&quot;3&quot; match_on=&quot;2&quot;/&gt;
+  &lt;handler type=&quot;Mail&quot;
+           toaddrs=&quot;pete&#64;example.com&quot;
+           fromaddr=&quot;root&#64;example.com&quot;
+           subject=&quot;Device Rebooted&quot;
+           body=&quot;\1 was rebooted&quot;/&gt;
+&lt;/rule&gt;
+</pre>
+<p>The text <tt class="literal"><span class="pre">rebooted</span></tt> would be constant in all of the log messages and
+thus would make an ideal candidate to use for our suppression-based
+matching.  You'll notice that parentheses now surround the text which
+enables us to identify that part of the regular expression as <tt class="literal"><span class="pre">2</span></tt>
+because it is the second item that was been grouped (the IP address is
+item <tt class="literal"><span class="pre">1</span></tt>).  Consequently, the parameter to <tt class="literal"><span class="pre">match_on</span></tt> has been
+adjusted to the value of <tt class="literal"><span class="pre">2</span></tt>.  This will now generate an email
+whenever <em>any</em> three devices have been rebooted.</p>
+<p>Although these examples have only used a single value to <tt class="literal"><span class="pre">match_on</span></tt>,
+you are free to specify as many parts of the message as you'd like.
+Just use commas to separate the match group identifiers.  For
+example:</p>
+<pre class="literal-block">
+&lt;rule&gt;
+  &lt;regexp&gt;.*? (\d+\.\d+\.\d+\.\d+): .*? (rebooted)&lt;/regexp&gt;
+  &lt;handler type=&quot;WaitToCount&quot; threshold=&quot;3&quot; match_on=&quot;1,2&quot;/&gt;
+  &lt;handler type=&quot;Mail&quot;
+           toaddrs=&quot;pete&#64;example.com&quot;
+           fromaddr=&quot;root&#64;example.com&quot;
+           subject=&quot;Device Rebooted&quot;
+           body=&quot;\1 was rebooted&quot;/&gt;
+&lt;/rule&gt;
+</pre>
+<p>Even though we are able to specify more than one match group, the
+above example is a poor one as the additional match group does not
+change the behavior whatsoever.  It will still only send an email when
+the <em>same</em> device has been rebooted three times.  Our earlier solution
+is more concise.</p>
+<p>You've now seen the power of the <tt class="literal"><span class="pre">match_on</span></tt> parameter and how to use
+it properly when matching for suppression.  This is important for one
+to master the correct use of the suppression handlers.  Again, the
+<tt class="literal"><span class="pre">match_on</span></tt> parameter can be used in any of the suppression-based
+event handlers that will be discussed in the next sections.</p>
+</div>
+<div class="section" id="waittocount-event-handler">
+<h1><a name="waittocount-event-handler">WaitToCount Event Handler</a></h1>
+<p>The <tt class="literal"><span class="pre">WaitToCount</span></tt> event handler suppresses matching events until the
+number of matched events has reached the configured threshold.  In
+other words, it waits until <tt class="literal"><span class="pre">n</span></tt> matching events arrive before
+allowing the handler chain to proceed.  The following configuration
+will only send an email when three messages arrive with the same error
+code:</p>
+<pre class="literal-block">
+&lt;rule&gt;
+  &lt;regexp&gt;Error Code = (\d+), Error Message = (.*)&lt;/regexp&gt;
+  &lt;handler type=&quot;WaitToCount&quot; threshold=&quot;3&quot; match_on=&quot;1&quot;/&gt;
+  &lt;handler type=&quot;Mail&quot;
+           toaddrs=&quot;pete&#64;example.com&quot;
+           fromaddr=&quot;root&#64;example.com&quot;
+           subject=&quot;Application Error&quot;
+           body=&quot;\1: \2&quot;/&gt;
+&lt;/rule&gt;
+</pre>
+<p><tt class="literal"><span class="pre">WaitToCount</span></tt> can accept the following options:</p>
+<dl>
+<dt>threshold (optional)</dt>
+<dd>Specifies the number of matched messages that must arrive before
+allowing the event handler chain to proceed.  The value must be a
+positive integer.  The default value is <tt class="literal"><span class="pre">3</span></tt>.</dd>
+<dt>reset (optional)</dt>
+<dd>Specifies whether the handler should reset its internal count once
+the threshold has been crossed.  If this is not true, any subsequent
+messages received after the threshold has been exceeded will enable
+the handler chain to proceed.  The value is a boolean which is
+specified using <tt class="literal"><span class="pre">1</span></tt> to indicate true, or <tt class="literal"><span class="pre">0</span></tt> to indicate false.
+The default value is <tt class="literal"><span class="pre">1</span></tt>.</dd>
+<dt>match_on (optional)</dt>
+<dd>See the earlier section on suppression-based matching.</dd>
+</dl>
+</div>
+<div class="section" id="intervalcount-event-handler">
+<h1><a name="intervalcount-event-handler">IntervalCount Event Handler</a></h1>
+<p>The <tt class="literal"><span class="pre">IntervalCount</span></tt> event handler will enable the event handler
+chain to proceed upon receipt of the first matched message.  However,
+subsequent events are suppressed until the configured number of
+matched events has intervened.  In other words, this is identical to
+the default behavior of <tt class="literal"><span class="pre">WaitToCount</span></tt> with the exception that the
+handler chain is permitted to proceed on the first matched event
+instead of having to wait to the threshold has been crossed.  The
+following configuration will send an email immediately when a message
+arrives with an error code.  Subsequent messages with the same error
+code are suppressed until every third message:</p>
+<pre class="literal-block">
+&lt;rule&gt;
+  &lt;regexp&gt;Error Code = (\d+), Error Message = (.*)&lt;/regexp&gt;
+  &lt;handler type=&quot;IntervalCount&quot; threshold=&quot;3&quot; match_on=&quot;1&quot;/&gt;
+  &lt;handler type=&quot;Mail&quot;
+           toaddrs=&quot;pete&#64;example.com&quot;
+           fromaddr=&quot;root&#64;example.com&quot;
+           subject=&quot;Application Error&quot;
+           body=&quot;\1: \2&quot;/&gt;
+&lt;/rule&gt;
+</pre>
+<p><tt class="literal"><span class="pre">IntervalCount</span></tt> can accept the following options:</p>
+<dl>
+<dt>threshold (optional)</dt>
+<dd>Specifies the number of matched messages that must arrive after
+allowing the handler chain to proceed.  Bear in mind that the chain
+is permitted to proceed upon receipt of the first matched message.
+The value must be a positive integer.  The default value is <tt class="literal"><span class="pre">3</span></tt>.</dd>
+<dt>match_on (optional)</dt>
+<dd>See the earlier section on suppression-based matching.</dd>
+</dl>
+</div>
+<div class="section" id="waittofrequency-event-handler">
+<h1><a name="waittofrequency-event-handler">WaitToFrequency Event Handler</a></h1>
+<p>The <tt class="literal"><span class="pre">WaitToFrequency</span></tt> event handler suppresses matching events until
+the number of matched events has reached the configured threshold
+within the configured interval.  In other words, it waits until <tt class="literal"><span class="pre">n</span></tt>
+matching events arrive in <tt class="literal"><span class="pre">t</span></tt> seconds before allowing the handler
+chain to proceed.  The following configuration will only send an email
+when three messages arrive with the same error code within an interval
+of 10-seconds:</p>
+<pre class="literal-block">
+&lt;rule&gt;
+  &lt;regexp&gt;Error Code = (\d+), Error Message = (.*)&lt;/regexp&gt;
+  &lt;handler type=&quot;WaitToFrequency&quot; threshold=&quot;3&quot; interval=&quot;10&quot; match_on=&quot;1&quot;/&gt;
+  &lt;handler type=&quot;Mail&quot;
+           toaddrs=&quot;pete&#64;example.com&quot;
+           fromaddr=&quot;root&#64;example.com&quot;
+           subject=&quot;Application Error&quot;
+           body=&quot;\1: \2&quot;/&gt;
+&lt;/rule&gt;
+</pre>
+<p><tt class="literal"><span class="pre">WaitToFrequency</span></tt> can accept the following options:</p>
+<dl>
+<dt>threshold (optional)</dt>
+<dd>Specifies the number of matched messages that must arrive within the
+interval before allowing the event handler chain to proceed.  The
+value must be a positive integer.  The default value is <tt class="literal"><span class="pre">3</span></tt>.</dd>
+<dt>interval (optional)</dt>
+<dd>Specifies the number of seconds in which the number of matched
+events must arrive before allowing the event handler chain to
+proceed.  The value must be a positive integer.  The default value
+is <tt class="literal"><span class="pre">60</span></tt>.</dd>
+<dt>reset (optional)</dt>
+<dd>Specifies whether the handler should reset its internal count once
+the threshold has been crossed.  If this is not true, the previous
+matched messages are used to compute the frequency of message
+arrival.  The value is a boolean which is specified using <tt class="literal"><span class="pre">1</span></tt> to
+indicate true, or <tt class="literal"><span class="pre">0</span></tt> to indicate false.  The default value is
+<tt class="literal"><span class="pre">1</span></tt>.</dd>
+<dt>match_on (optional)</dt>
+<dd>See the earlier section on suppression-based matching.</dd>
+</dl>
+</div>
+<div class="section" id="limittofrequency-event-handler">
+<h1><a name="limittofrequency-event-handler">LimitToFrequency Event Handler</a></h1>
+<p>The <tt class="literal"><span class="pre">LimitToFrequency</span></tt> event handler limits the number of matched
+events to the configured threshold within the configured interval.  In
+other words, only a maximum of <tt class="literal"><span class="pre">n</span></tt> matching events will occur in
+<tt class="literal"><span class="pre">t</span></tt> seconds.  The following configuration will send a maximum of
+three emails per hour no matter how many messages contain the same
+error code:</p>
+<pre class="literal-block">
+&lt;rule&gt;
+  &lt;regexp&gt;Error Code = (\d+), Error Message = (.*)&lt;/regexp&gt;
+  &lt;handler type=&quot;LimitToFrequency&quot; threshold=&quot;10&quot; interval=&quot;3600&quot; match_on=&quot;1&quot;/&gt;
+  &lt;handler type=&quot;Mail&quot;
+           toaddrs=&quot;pete&#64;example.com&quot;
+           fromaddr=&quot;root&#64;example.com&quot;
+           subject=&quot;Application Error&quot;
+           body=&quot;\1: \2&quot;/&gt;
+&lt;/rule&gt;
+</pre>
+<p><tt class="literal"><span class="pre">LimitToFrequency</span></tt> can accept the following options:</p>
+<dl>
+<dt>threshold (optional)</dt>
+<dd>Specifies the maximum number of matched messages that can arrive
+within the interval before suppressing further messages and
+terminating the event handler chain. The value must be a positive
+integer.  The default value is <tt class="literal"><span class="pre">3</span></tt>.</dd>
+<dt>interval (optional)</dt>
+<dd>Specifies the number of seconds in which the maximum number of
+matched events must arrive before suppressing further messages and
+terminating the event handler chain.  The value must be a positive
+integer.  The default value is <tt class="literal"><span class="pre">60</span></tt>.</dd>
+<dt>reset (optional)</dt>
+<dd>Specifies whether the handler should reset its internal count once
+the threshold has been crossed.  If this is not true, the previous
+matched messages are used to compute the frequency of message
+arrival.  The value is a boolean which is specified using <tt class="literal"><span class="pre">1</span></tt> to
+indicate true, or <tt class="literal"><span class="pre">0</span></tt> to indicate false.  The default value is
+<tt class="literal"><span class="pre">1</span></tt>.</dd>
+<dt>match_on (optional)</dt>
+<dd>See the earlier section on suppression-based matching.</dd>
+</dl>
+</div>
+<div class="section" id="conclusion">
+<h1><a name="conclusion">Conclusion</a></h1>
+<p>You have seen how LogWrap's suppression-based event handlers operate
+and how they are integrated into the framework.  In addition, each of
+the packaged suppression-based event handlers has been presented.  If
+one of these handlers does not meet your suppression needs, you can
+implement your own by writing a custom event handler.  There is a
+detailed <a class="reference" href="custom-tutorial.html">tutorial</a> on the subject.</p>
+</div>
+</div>
+</body>
+</html>

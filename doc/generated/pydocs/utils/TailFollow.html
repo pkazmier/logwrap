@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="generator" content="Docutils 0.2.8: http://docutils.sourceforge.net/" />
+<title>TailFollow</title>
+<link rel="stylesheet" href="http://www.kazmier.com/computer/logwrap/docutils.css" type="text/css" />
+</head>
+<body>
+<div class="document" id="tailfollow">
+<h1 class="title">TailFollow</h1>
+<p>TailFollow enables a user to read new data as it is appended to a file
+in a manner similar to a 'tail -f' command.  As a file is moved or
+rotated (perhaps as part of a log rotation mechanism), TailFollow can
+continue to read from the file as it moves until a new file is created
+in the original location.</p>
+<p>The simple (non-tracking mode) usage of TailFollow is as follows:</p>
+<pre class="literal-block">
+tail = TailFollow(&quot;/var/log/syslog&quot;)
+for line in tail:
+    print line,
+tail.close()
+</pre>
+<p>When tracking changes to a file, usage is as follows:</p>
+<pre class="literal-block">
+while 1:
+    tail = TailFollow(&quot;/var/log/syslog&quot;, track=1)
+    for line in tail:
+        print line,
+    time.sleep(1)
+tail.close()
+</pre>
+<p>It is important to insert a delay to avoid a busy loop in which the
+TailFollow tries to determine if the file has moved.  Failure to do so
+will result in excessive CPU consumption when the end of file occurs.</p>
+<blockquote>
+<dl>
+<dt>class <cite>TailFollow(object)</cite>:</dt>
+<dd><p class="first">Tail a file and follow as additional data is appended.
+TailFollow can be used to monitor log files.  It can also track
+when a the file has been moved (perhaps by a log rotation script).
+In this case, TailFollow will automatically close the old file,
+and re-open the new file.</p>
+<blockquote class="last">
+<dl>
+<dt><cite>__init__(filename, track=1)</cite>:</dt>
+<dd>Constructor that specifies the file to be tailed.  An
+optional keyword argument specifies whether or not the file
+should be tracked.</dd>
+<dt><cite>__iter__()</cite>:</dt>
+<dd>Returns an iterator that can be used to iterate over the
+lines of the file as they are appended.  TailFollow implements
+the iterator contract, as a result, self is returned to the
+caller.</dd>
+<dt><cite>next()</cite>:</dt>
+<dd>Returns the next line from the file being tailed.  This
+method is part of the iterator contract.  StopIteration is
+thrown when there an EOF has been reached.</dd>
+<dt><cite>close()</cite>:</dt>
+<dd>Closes the current file.</dd>
+</dl>
+</blockquote>
+</dd>
+</dl>
+</blockquote>
+</div>
+</body>
+</html>

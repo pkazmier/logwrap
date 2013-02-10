@@ -1,0 +1,339 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="generator" content="Docutils 0.2.8: http://docutils.sourceforge.net/" />
+<title>LogEncapsulator</title>
+<link rel="stylesheet" href="http://www.kazmier.com/computer/logwrap/docutils.css" type="text/css" />
+</head>
+<body>
+<div class="document" id="logencapsulator">
+<h1 class="title">LogEncapsulator</h1>
+<p>This module provides various classes that enable one to monitor log
+files using the event framework included in this package.  There are
+several classes that are part of this module, each of which are fully
+documented.  A brief overview of the entire module is provided in
+subsequent paragraphs.</p>
+<p>The primary class that users interact with is the LogEncapsulator.
+The LogEncapsulator implements the EventGenerator interface (its a
+source of Events).  Each LogEncapsulator is configured with one or
+more files to monitor using a single set of Rules.  A Rule is used to
+determine if a match has occurred when monitoring, and when that Event
+does occur, the Rule specifies the EventHandler used to process the
+Event (see the Event module for details on the event framework).</p>
+<p>The EventHandler used to process a LogEncapsulator generated Event can
+expect that the Event's data property contains a LogMatch object.  The
+LogMatch object simply encapsulates the line from the log file that
+triggered the match, as well as the match object from the re package.
+This package includes various EventHandlers that can be used as part
+of a Rule definition.</p>
+<p>Sample use of this module follows:</p>
+<pre class="literal-block">
+#!/usr/bin/python
+
+from time import sleep
+from com.kazmier.event.Event import EventDispatcher
+from com.kazmier.event.Event import ChainEventHandler
+from com.kazmier.event.Event import PrintEventHandler
+from com.kazmier.logwrap.LogEncapsulator import Rule
+from com.kazmier.logwrap.LogEncapsulator import LogEncapsulator
+from com.kazmier.logwrap.LogEncapsulator import WaitToCountEventHandler
+
+dispatcher = EventDispatcher()
+try:
+    encapsulator = LogEncapsulator(&quot;Test Encapsulator&quot;)
+    encapsulator.watch_file(&quot;/var/log/syslog&quot;)
+    encapsulator.watch_file(&quot;/var/log/maillog&quot;)
+    encapsulator.add_rule(Rule(&quot;some pattern&quot;, PrintEventHandler()))
+    encapsulator.add_rule(Rule(&quot;another&quot;, ChainEventHandler(
+                                            WaitToCountEventHandler(),
+                                            PrintEventHandler())))
+    dispatcher.error_handler(ErrorHandlerAdapter(PrintEventHandler()))
+    dispatcher.add_event_generator(encapsulator)
+    dispatcher.start()
+    while 1:
+        sleep(1)
+
+except Exception, e:
+    dispatcher.stop()
+    print e
+</pre>
+<p>If you do not want to use the API directly, there is a tool called
+logwrap that will parse an XML file and generate all of the
+appropriate encapsulators and rules automatically.</p>
+<blockquote>
+<dl>
+<dt>class <cite>Rule(object)</cite>:</dt>
+<dd><p class="first">A rule is comprised of a pattern and an event handler.  The
+event handler is used to process events that are generated when
+the pattern is matched in a log file.  In addition, a rule can
+also be 'quick', which indicates that upon a match, all further
+processing should stop.  By default, a message from a log file
+can match multiple rules.</p>
+<blockquote class="last">
+<dl>
+<dt><cite>__init__(regexp, handler, quick=0)</cite>:</dt>
+<dd>Constructor that specifies the regular expression used to
+match lines, the event handler used to process events, and an
+optional flag indicating the quickness of the rule.</dd>
+<dt><cite>__str__()</cite>:</dt>
+<dd>Returns a string representation of a rule.</dd>
+</dl>
+</blockquote>
+</dd>
+<dt>class <cite>LogMatch(object)</cite>:</dt>
+<dd><p class="first">When an event is generated, indicating a log match, the event
+contains a LogMatch object that contains the line that caused the
+event to be generated, as well as the 're.match' object so that
+individual components of the matched can be fetched.</p>
+<blockquote class="last">
+<dl>
+<dt><cite>__init__(line, match)</cite>:</dt>
+<dd>Constructor that specifies the line that caused a match to
+occur, as well as the match object returned by the 're'
+module.</dd>
+<dt><cite>__str__()</cite>:</dt>
+<dd>Returns a string representation of the LogMatch.</dd>
+</dl>
+</blockquote>
+</dd>
+<dt>class <cite>LogEncapsulator(EventGenerator)</cite>:</dt>
+<dd><p class="first">Wraps one or more log files and generates events based on
+regular expressions that match log entries.  In addition, if the
+log file(s) are moved or rotated, the original file(s) are closed,
+and the new file(s) are re-opened (see TailFollow for more
+details).</p>
+<p>When the LogEncapsulator creates an Event, the event data is an
+instance of LogMatch which contains the original log line that
+caused the event, as well as a match object from the regular
+expression.  This match object can then be used by the
+EventHandler when processing the Event.</p>
+<p>The LogEncapsulator is designed to be used in the Event framework
+that accompanies this module.  Specifically, the encapsulator is
+an instance of an EventGenerator and must be added to an
+EventDispatcher to process events that are generated.</p>
+<blockquote class="last">
+<dl>
+<dt><cite>__init__(name)</cite>:</dt>
+<dd>Constructor that specifies the name of the encapsulator.</dd>
+<dt><cite>__str__()</cite>:</dt>
+<dd>Returns the name of the encapsulator.</dd>
+<dt><cite>watch_file(filename, track=1)</cite>:</dt>
+<dd>Watch the specified file for new data that may or may not
+trigger an event based on the configured rules.  An optional
+parameter called 'track' can be used to indicate if the file
+should be tracked in the event it is rotated (by default).</dd>
+<dt><cite>add_rule(rule)</cite>:</dt>
+<dd>Add the rule to the current set of rules that will be used
+to process new data from the various files being watched.</dd>
+<dt><cite>stop()</cite>:</dt>
+<dd>Stop the encapsulator and cleanly shutdown all resources
+currently in use such as the files that are being tracked via
+TailFollow.</dd>
+<dt><cite>get_events()</cite>:</dt>
+<dd>Gets all pending events that have occurred since the last
+time this method was invoked.  An event is generated when a
+log entry matches one of the rules associated with this
+encapsulator.</dd>
+</dl>
+</blockquote>
+</dd>
+<dt>class <cite>WaitToCountEventHandler(EventHandler)</cite>:</dt>
+<dd><p class="first">An event handler that only succeeds when a particular count
+threshold has been exceeded for the same matched log message.
+This event handler is designed to be used in a ChainEventHandler
+as it doesn't provide any functionality by itself.</p>
+<blockquote class="last">
+<dl>
+<dt><cite>__init__(threshold=3, reset=1, match_on=(0,))</cite>:</dt>
+<dd>Constructor that specifies the threshold (or count) that
+must be exceeded before the event handler returns success
+(which enables the chain to proceed).  An optional boolean
+argument called 'reset' can be used to indicate that the
+handler should reset its count upon success (thereby resetting
+the trigger), otherwise, a message is generated for each
+subsequent event.  Finally, the 'match_on' optional parameter
+specifies a tuple of fields that are used to match a message
+with a count.  This enables users to key off of a part of the
+message when incrementing a count.</dd>
+<dt><cite>process_event(event)</cite>:</dt>
+<dd>Process an event and check if it has exceeded the current
+threshold.  If the threshold has been exceeded, return a 1 to
+indicate success, otherwise return 0 which is used to stop
+event processing in the chain.</dd>
+</dl>
+</blockquote>
+</dd>
+<dt>class <cite>IntervalCountEventHandler(EventHandler)</cite>:</dt>
+<dd><p class="first">An event handler that succeeds upon receipt of the first
+matched log message and thereafter only when the interval has been
+exceeded.  Note, this is different from the WaitToCount event
+handler which succeeds only after the threshold has been exceeded.
+This event handler is designed to be used in a ChainEventHandler
+as it doesn't provide any functionality by itself.</p>
+<blockquote class="last">
+<dl>
+<dt><cite>__init__(threshold=3, match_on=(0,))</cite>:</dt>
+<dd>Constructor that specifies the threshold (or interval) that
+must intervene between matched log messages before success is
+returned (which enables the chain to proceed).  The 'match_on'
+optional parameter specifies a tuple of fields that are used
+to match a message with a count.  This enables users to key
+off of a part of the message when incrementing a count.</dd>
+<dt><cite>process_event(event)</cite>:</dt>
+<dd>Process an event and check if it has exceeded the current
+threshold.  If the threshold has been exceeded, return a 1 to
+indicate success, otherwise return 0 which is used to stop
+event processing in the chain.  Also return 1 upon receipt of
+the first event.</dd>
+</dl>
+</blockquote>
+</dd>
+<dt>class <cite>WaitToFrequencyEventHandler(EventHandler)</cite>:</dt>
+<dd><p class="first">An event handler that only succeeds when a particular frequency
+threshold has been exceeded for the same matched log message.
+This event handler is designed to be used in a ChainEventHandler
+as it doesn't provide any functionality by itself.</p>
+<blockquote class="last">
+<dl>
+<dt><cite>__init__(threshold=3, interval=60, reset=1, match_on=(0,))</cite>:</dt>
+<dd>Constructor that specifies the threshold (or count) that
+must be exceeded within the specified interval before the
+event handler returns success (which enables the chain to
+proceed).  An optional boolean argument called 'reset' can be
+used to indicate that the handler should reset its count upon
+success (thereby resetting the trigger), otherwise the
+previous events are taken into account in subsequent
+calculations.  Finally, the 'match_on' optional parameter
+specifies a tuple of fields that are used to match a message
+with a count.  This enables users to key off of a part of the
+message when incrementing a count.</dd>
+<dt><cite>process_event(event)</cite>:</dt>
+<dd>Process an event and check if it has exceeded the current
+threshold.  If the threshold has been exceeded, return a 1 to
+indicate success, otherwise return 0 which is used to stop
+event processing in the chain.</dd>
+</dl>
+</blockquote>
+</dd>
+<dt>class <cite>LimitToFrequencyEventHandler(EventHandler)</cite>:</dt>
+<dd><p class="first">An event handler that only succeeds when a particular frequency
+threshold has not been exceeded for the same matched log message.
+This event handler is designed to be used in a ChainEventHandler
+as it doesn't provide any functionality by itself.</p>
+<blockquote class="last">
+<dl>
+<dt><cite>__init__(threshold=3, interval=60, reset=1, match_on=(0,))</cite>:</dt>
+<dd>Constructor that specifies the threshold (or count) that
+must not be exceeded within the specified interval before the
+event handler returns success (which enables the chain to
+proceed).  An optional boolean argument called 'reset' can be
+used to indicate that the handler should reset its count upon
+success (thereby resetting the trigger), otherwise the
+previous events are taken into account in subsequent
+calculations.  Finally, the 'match_on' optional parameter
+specifies a tuple of fields that are used to match a message
+with a count.  This enables users to key off of a part of the
+message when incrementing a count.</dd>
+<dt><cite>process_event(event)</cite>:</dt>
+<dd>Process an event and check if it has exceeded the current
+threshold.  If the threshold has not been exceeded, return a 1
+to indicate success, otherwise return 0 which is used to stop
+event processing in the chain.</dd>
+</dl>
+</blockquote>
+</dd>
+<dt>class <cite>ErrorHandlerAdapter(EventHandler)</cite>:</dt>
+<dd><p class="first">ErrorHandlerAdapter adapts the Event generated by the
+EventProcessor for errored events such that the data field of the
+Event object contains a LogMatch object.  This enables users to
+use their existing library of event handlers written that expect
+LogMatch objects to be present.  For example, this adapter class
+enables users to use the MainEventHandler and SnmpEventHandlers
+defined in this class.</p>
+<p>The adapter works by introspecting the data object contained
+within the original event which is a tuple that contains the
+exception as well as the original event that caused the error.
+These two values are placed into a Match object in fields 1 and 2
+respectively.  Thus, handlers can use match.group(1) to obtain the
+exception, and match.group(2) to obtain the original event.</p>
+<blockquote class="last">
+<dl>
+<dt><cite>__init__(handler)</cite>:</dt>
+<dd>Constructor that specifies an event handler wishing to
+receive an adpated event that contains a LogMatch object in
+the Event's data field.</dd>
+<dt><cite>process_event(event)</cite>:</dt>
+<dd>Adapts the event to a format expected by logwrap event handlers.</dd>
+</dl>
+</blockquote>
+</dd>
+<dt>class <cite>MailEventHandler(EventHandler)</cite>:</dt>
+<dd><p class="first">MailEventHandler sends an email message that can optionally
+contain parts of the log message that generated the event.  The
+subject and body strings are examined for any sequence of <tt class="literal"><span class="pre">\n</span></tt>
+where <tt class="literal"><span class="pre">n</span></tt> is a digit from 0 to 99 that represents the
+appropriate group of the match object that was included as part of
+the LogMatch Event data.</p>
+<blockquote class="last">
+<dl>
+<dt><cite>__init__(fromaddr, toaddrs, subject='', body='', smtphost='localhost')</cite>:</dt>
+<dd>Constructor that specifies the sender, a list of
+recipients, a subject, and a body.  The subject and body are
+interpolated for special characters that should be replaced by
+parts of the event.</dd>
+<dt><cite>process_event(event)</cite>:</dt>
+<dd>Sends an email in response to the Event.</dd>
+</dl>
+</blockquote>
+</dd>
+<dt>class <cite>SnmpTrapEventHandler(EventHandler)</cite>:</dt>
+<dd><p class="first">SnmpTrapEventHandler sends an SNMP trap that can optionally
+contain parts of the log message that generated the event as
+varbinds of the trap.  Each varbind message body can contain
+<tt class="literal"><span class="pre">\n</span></tt> where <tt class="literal"><span class="pre">n</span></tt> is a digit from 0 to 99 that represents the
+appropriate group of the match object that was included as part of
+the LogMatch Event data.</p>
+<blockquote class="last">
+<dl>
+<dt><cite>__init__(hosts, community, trapoid, varbinds=())</cite>:</dt>
+<dd><p class="first">Constructor that specifies the a list of hosts, a community
+string to use for all of the hosts, the OID of the trap, as
+well as a sequence of varbinds.  Each varbind sequence is a
+tuple that contains the OID, type, and value (all of which are
+specified as strings).  For example:</p>
+<pre class="literal-block">
+trap = SnmpTrapEventHandler( \
+         (&quot;host1&quot;, &quot;host2&quot;),
+         &quot;public&quot;,
+         &quot;1.3.6.1.4.1.8233.111.1&quot;,
+         ((&quot;1.3.6.1.4.1.8233.200.1&quot;, &quot;OCTETSTRING&quot;, &quot;Error&quot;),
+          (&quot;1.3.6.1.4.1.8233.200.2&quot;, &quot;INTEGER&quot;, 100),
+          (&quot;1.3.6.1.4.1.8233.200.3&quot;, &quot;INTEGER&quot;, &quot;\2&quot;)))
+</pre>
+<p>As an alternative, all of the arguments may be specified as
+strings.  In which case, the following is the expected
+format:</p>
+<pre class="literal-block">
+trap = SnmpTrapEventHandler( \
+         &quot;host1, host2&quot;,
+         &quot;public&quot;,
+         &quot;1.3.6.1.4.1.8233.111.1&quot;,
+         &quot;1.3.6.1.4.1.8233.200.1: OCTETSTRING: Error
+          1.3.6.1.4.1.8233.200.2: INTEGER: 100
+          1.3.6.1.4.1.8233.200.3: INTEGER: \2&quot;)
+</pre>
+<p class="last">The string formats are designed for external programmatic
+applications (such as an XML rule builder, or GUI front-end.</p>
+</dd>
+<dt><cite>process_event(event)</cite>:</dt>
+<dd>Sends an SNMP Trap in response to the Event.</dd>
+</dl>
+</blockquote>
+</dd>
+</dl>
+</blockquote>
+</div>
+</body>
+</html>
