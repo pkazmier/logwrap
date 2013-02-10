@@ -85,7 +85,7 @@ tutorial assumes you already have a general understanding of how
 logwrap works.
 
 [LogEncapsulator]: http://www.kazmier.com/computer/logwrap/pydocs/logwrap/LogEncapsulator.html
-[configuration]: http://www.kazmier.com/computer/logwrap/logwrap.xml
+[configuration]: http://www.kazmier.com/computer/logwrap/logwrap.txt
 [SuppressionHandlers]: http://www.kazmier.com/computer/logwrap/suppression.html
 [CustomEventHandlerTutorial]: http://www.kazmier.com/computer/logwrap/custom-tutorial.html
 
