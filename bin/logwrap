@@ -1,0 +1,135 @@
+#!/usr/bin/python
+# Copyright (c) 2003, Pete Kazmier
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+#
+#    - Redistributions of source code must retain the above copyright
+#      notice, this list of conditions and the following disclaimer.
+#
+#    - Redistributions in binary form must reproduce the above
+#      copyright notice, this list of conditions and the following
+#      disclaimer in the documentation and/or other materials provided
+#      with the distribution.
+#
+#    - Neither the name of the 'Kazmier' nor the names of its
+#      contributors may be used to endorse or promote products derived
+#      from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+# FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+# COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+# INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+# BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+# LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+# LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+# ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+
+from exceptions import Exception
+from os import setsid, chdir, umask, fork
+from os.path import abspath
+from sys import argv, exit
+from time import sleep
+from getopt import getopt, GetoptError
+from xml.dom.minidom import parse
+
+from com.kazmier.event.Event import EventDispatcher
+from com.kazmier.logwrap.Builder import parse_configuration
+from com.kazmier.logwrap.LogEncapsulator import LogEncapsulator
+
+class LogWrap(object):
+    """Simple front-end that utilizes the event framework to monitor
+    log files for various events that are created upon matches to
+    regular expressions.
+    """
+    def __init__(self):
+        """Constructor that creates the event framework."""
+        self._dispatcher = EventDispatcher()
+
+    def start(self):
+        """Starts the event framework."""
+        self._dispatcher.start()
+
+    def stop(self):
+        """Stops the event framework."""
+        self._dispatcher.stop()
+
+    def configure(self, config):
+        """Configure log encapsulators based on supplied XML configuration."""
+        doc = parse(config)
+        error_handler, log_encapsulators = parse_configuration(doc)
+        
+        if error_handler:
+            self._dispatcher.error_handler(error_handler)
+
+        for encapsulator in log_encapsulators:
+            self._dispatcher.add_event_generator(encapsulator)
+
+        doc.unlink()
+
+# Run as a daemon.  This does four things: 1) it forks a child
+# so the parent can terminate (thus the init process becomes
+# the child's parent process), 2) establish our own session
+# and releases any holds on a console, 3) changes the working
+# directory to the root (so filesystems can be unmounted), and
+# 4) the umask is reset to 0.
+def daemonize():
+    if fork() != 0:
+        exit(0)
+    setsid()
+    chdir('/')
+    umask(0)
+
+# Prints the usage and terminates the program.
+def usage(exitValue=1):
+    print 'Usage:', argv[0], '[-h] [-d] configuration_file'
+    print '  Where'
+    print '    -h   displays this help message'
+    print '    -d   runs in daemon mode (background)'
+    exit(exitValue)
+
+# Command line argument processing.  Only two options are
+# available: -h and -d which runs it as a daemon
+try:
+    opts, args = getopt(argv[1:], "hd")
+except GetoptError:
+    usage()
+
+if not len(args) == 1:
+    usage()
+
+# Convert configution file to absoluate path in case we end up
+# going into daemon mode which puts us in the root directory.
+# Note: we need to do this before daemonization.
+config = abspath(args[0])
+
+for opt, arg in opts:
+    if opt == '-h':
+        usage(0)
+    elif opt == '-d':
+        daemonize()
+
+############################################################
+# This is the crux of the program.  We are now running (in
+# either foreground or background) and we have a variable
+# that contains the location of the main configuration file.
+
+wrapper = LogWrap()
+try:
+    wrapper.configure(config)
+    wrapper.start()
+    while 1:
+        sleep(1)
+
+except Exception, e:
+    print e
+    wrapper.stop()
+    exit(1)
+
+exit(0)
