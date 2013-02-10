@@ -127,7 +127,7 @@ In addition, a script called `logwrap` will be installed into one of
 your system `bin` directories.  This is the program that users will
 execute to start log monitoring.
 
-## Change Log
+## Change Log (from old CVS repo)
 
 v1.0  
   * Fixed a bug that would prevent the MailHandler from permitting other
